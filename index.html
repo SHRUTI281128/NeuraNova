@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuraNova — Sherlock Code Inspector</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        app: {
+                            bg: '#f8fafc',
+                            card: '#ffffff',
+                            surface: '#f1f5f9',
+                            border: '#e2e8f0',
+                            navy: '#1e293b',
+                            lavender: '#c7d2fe',
+                            periwinkle: '#6366f1',
+                            sky: '#e0f2fe',
+                            skyText: '#0284c7',
+                            amber: '#fef3c7',
+                            amberText: '#d97706',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- Alpine.js CDN -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+        body { font-family: 'Plus Jakarta Sans', sans-serif; }
+        code, pre { font-family: 'JetBrains Mono', monospace; }
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-app-bg text-app-navy min-h-screen flex flex-col" x-data="sherlockApp()">
+
+    <!-- Top Navigation Bar -->
+    <header class="border-b border-app-border bg-app-card/90 backdrop-blur-md sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-app-sky border border-app-skyText/20 rounded-xl text-app-skyText">🔍</div>
+                <div>
+                    <h1 class="font-bold text-lg tracking-tight text-app-navy">NeuraNova <span class="text-xs px-2.5 py-0.5 rounded-full bg-app-lavender text-indigo-900 font-semibold">v1.4 Test Matrix & Governance</span></h1>
+                    <p class="text-xs text-slate-500">Automated Dead Code Analysis & Evaluation Parameters</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-4">
+                <span class="inline-flex items-center text-xs text-slate-600 bg-app-surface px-3 py-1.5 rounded-full border border-app-border font-medium">
+                    <span class="w-2 h-2 rounded-full mr-2" :class="backendConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'"></span>
+                    <span x-text="backendConnected ? 'Live API Connected' : 'API Disconnected'"></span>
+                </span>
+                <button @click="resetScan()" class="text-xs bg-app-surface hover:bg-slate-200 text-slate-700 px-3 py-1.5 rounded-full border border-app-border transition font-medium">
+                    Clear Workspace
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Layout -->
+    <main class="max-w-7xl mx-auto px-6 py-8 flex-1 w-full grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        <!-- Left Panel: Inputs, Presets & Pipeline -->
+        <section class="lg:col-span-4 space-y-6">
+            
+            <!-- Target Form Card -->
+            <div class="bg-app-card border border-app-border rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                <h2 class="text-base font-bold text-app-navy mb-4 flex items-center gap-2">
+                    🎯 Target Specification
+                </h2>
+
+                <template x-if="errorMessage">
+                    <div class="mb-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+                        ⚠️ <span x-text="errorMessage"></span>
+                    </div>
+                </template>
+
+                <form @submit.prevent="runInvestigation()" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Repository Path</label>
+                        <input type="text" x-model="target.repo" required class="w-full bg-app-surface border border-app-border rounded-xl px-3 py-2 text-sm text-app-navy font-mono">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Target File</label>
+                        <input type="text" x-model="target.file" required class="w-full bg-app-surface border border-app-border rounded-xl px-3 py-2 text-sm text-app-navy font-mono">
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-semibold text-slate-600 mb-1">Target Symbol / Class / Function</label>
+                        <input type="text" x-model="target.symbol" required class="w-full bg-app-surface border border-app-border rounded-xl px-3 py-2 text-sm text-app-navy font-mono">
+                    </div>
+
+                    <button type="submit" :disabled="isAnalyzing" class="w-full py-2.5 px-4 bg-app-periwinkle hover:bg-indigo-600 text-white font-bold rounded-xl text-sm transition shadow-sm flex items-center justify-center gap-2 disabled:opacity-50">
+                        <template x-if="!isAnalyzing">
+                            <span>🕵️ Execute AST Analysis</span>
+                        </template>
+                        <template x-if="isAnalyzing">
+                            <span>Executing Analysis...</span>
+                        </template>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Sample Scenarios / Presets -->
+            <div class="bg-app-card border border-app-border rounded-2xl p-6 shadow-sm">
+                <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Sample Scenarios</h3>
+                <div class="space-y-2">
+                    <button @click="loadPreset('C:/Users/SHRUTI MISHRA/requests', 'src/requests/api.py', 'get')" class="w-full text-left p-3 rounded-xl border border-app-border hover:border-app-periwinkle bg-app-surface/50 hover:bg-app-sky/30 transition flex items-center justify-between group">
+                        <div>
+                            <div class="text-xs font-bold text-app-navy group-hover:text-app-periwinkle transition">`get` in requests/api.py</div>
+                            <div class="text-[11px] text-slate-500">Scan active symbol in Requests library</div>
+                        </div>
+                        <span class="text-[10px] bg-rose-100 text-rose-800 border border-rose-200 px-2 py-0.5 rounded-full font-bold">High Risk</span>
+                    </button>
+
+                    <button @click="loadPreset('.', 'main.py', 'investigate_symbol')" class="w-full text-left p-3 rounded-xl border border-app-border hover:border-app-periwinkle bg-app-surface/50 hover:bg-app-sky/30 transition flex items-center justify-between group">
+                        <div>
+                            <div class="text-xs font-bold text-app-navy group-hover:text-app-periwinkle transition">`investigate_symbol`</div>
+                            <div class="text-[11px] text-slate-500">Scan this app's backend endpoint</div>
+                        </div>
+                        <span class="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-200 px-2 py-0.5 rounded-full font-bold">Active Symbol</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Live AST Execution Pipeline Overview -->
+            <div class="bg-app-sky/40 border border-app-skyText/20 rounded-2xl p-5">
+                <h4 class="text-xs font-bold text-app-skyText mb-2 flex items-center gap-1.5">
+                    <span>🕵️</span> Live AST Execution Pipeline
+                </h4>
+                <ul class="text-xs text-slate-600 space-y-2 list-disc list-inside font-medium">
+                    <li>Parsing AST nodes for symbol usage</li>
+                    <li>Analyzing test coverage references</li>
+                    <li>Querying git log history for last author</li>
+                    <li>Evaluating overall deletion risk score</li>
+                </ul>
+            </div>
+
+        </section>
+
+        <!-- Right Panel: Report, Test Case Matrix & Graphs -->
+        <section class="lg:col-span-8 space-y-6">
+            
+            <template x-if="report">
+                <div class="space-y-6">
+                    
+                    <!-- Verdict Banner -->
+                    <div class="bg-app-card border-2 rounded-2xl p-6 shadow-sm transition-all"
+                         :class="{
+                             'border-emerald-400 bg-emerald-50/40': report.verdict === 'safe',
+                             'border-amber-300 bg-amber-50/40': report.verdict === 'review',
+                             'border-rose-400 bg-rose-50/40': report.verdict === 'danger'
+                         }">
+                        
+                        <div class="flex flex-wrap items-center justify-between gap-4">
+                            <div>
+                                <span class="text-xs font-mono uppercase tracking-widest text-slate-400 font-semibold">Investigation Verdict</span>
+                                <div class="flex items-center gap-3 mt-1">
+                                    <h2 class="text-2xl font-extrabold tracking-tight"
+                                        :class="{
+                                            'text-emerald-700': report.verdict === 'safe',
+                                            'text-amber-700': report.verdict === 'review',
+                                            'text-rose-700': report.verdict === 'danger'
+                                        }"
+                                        x-text="report.verdictText"></h2>
+                                </div>
+                                <p class="text-xs text-slate-600 mt-2 font-medium" x-text="report.reason"></p>
+                            </div>
+
+                            <div class="text-right bg-app-card border border-app-border px-5 py-3 rounded-2xl shadow-sm">
+                                <div class="text-xs text-slate-400 uppercase font-mono font-bold">Risk Score</div>
+                                <div class="text-3xl font-black tracking-tight mt-0.5 flex items-center justify-end gap-1"
+                                     :class="{
+                                         'text-emerald-600': report.totalRiskScore < 15,
+                                         'text-amber-600': report.totalRiskScore >= 15 && report.totalRiskScore < 50,
+                                         'text-rose-600': report.totalRiskScore >= 50
+                                     }">
+                                    <span class="text-base font-bold bg-app-amber text-app-amberText px-2 py-0.5 rounded-full border border-amber-300">★</span>
+                                    <span x-text="report.totalRiskScore"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Toolbar: Ownership & Test Cases Buttons (NEW FEATURE INTEGRATED) -->
+                    <div class="bg-app-card border border-app-border rounded-2xl p-6 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                        <div class="space-y-1">
+                            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold uppercase">Governance & Criteria</span>
+                            <div class="text-sm font-bold text-app-navy flex items-center gap-2 mt-1">
+                                👤 Author/Owner: <span class="text-app-periwinkle font-mono" x-text="report.detected_owner"></span>
+                            </div>
+                            <p class="text-xs text-slate-500">Inspect the exact decision rules or request transfer rights from author.</p>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <!-- NEW FEATURE BUTTON: TEST CASES MATRIX -->
+                            <button @click="openTestModal = true" class="px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition flex items-center gap-1.5 shadow-sm">
+                                🧪 View Evaluation Test Cases (<span x-text="report.test_cases?.length || 0"></span>)
+                            </button>
+
+                            <!-- Ownership Request Button -->
+                            <button @click="openOwnershipModal = true" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition flex items-center gap-2 shadow-sm">
+                                📩 Request Rights
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Visual Radar Risk Map Graph -->
+                    <div class="bg-app-card border border-app-border rounded-2xl p-6 shadow-sm">
+                        <h3 class="text-sm font-bold text-app-navy flex items-center gap-2 mb-4">
+                            📊 Risk Impact Vector Map
+                        </h3>
+                        <div class="relative h-64 w-full flex justify-center items-center">
+                            <canvas id="riskRadarChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Evidence Collection List -->
+                    <div class="bg-app-card border border-app-border rounded-2xl p-6 shadow-sm space-y-4">
+                        <h3 class="text-sm font-bold text-app-navy flex items-center gap-2">
+                            📂 Evidence Locker <span class="text-xs font-normal text-slate-400">(Live AST Scans)</span>
+                        </h3>
+
+                        <div class="space-y-3">
+                            <template x-for="item in report.evidence_list" :key="item.category">
+                                <div class="p-4 rounded-xl bg-app-surface/60 border border-app-border flex items-start justify-between gap-4 hover:bg-app-surface transition">
+                                    <div class="space-y-1">
+                                        <div class="flex items-center gap-2">
+                                            <span class="text-[10px] font-mono px-2.5 py-0.5 rounded-full uppercase font-bold"
+                                                  :class="item.risk_points > 0 ? 'bg-app-amber text-app-amberText border border-amber-200' : 'bg-app-sky text-app-skyText border border-sky-200'"
+                                                  x-text="item.category"></span>
+                                        </div>
+                                        <p class="text-xs text-slate-700 leading-relaxed pt-1 font-medium" x-text="item.finding"></p>
+                                    </div>
+
+                                    <div class="text-right shrink-0">
+                                        <span class="text-xs font-mono font-bold px-3 py-1 rounded-full inline-block"
+                                              :class="item.risk_points > 0 ? 'bg-rose-100 text-rose-700 border border-rose-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'">
+                                            +<span x-text="item.risk_points"></span> pts
+                                        </span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                </div>
+            </template>
+
+            <!-- Blank State Placeholder -->
+            <template x-if="!report && !isAnalyzing">
+                <div class="bg-app-card border border-dashed border-app-border rounded-2xl p-12 text-center flex flex-col items-center justify-center min-h-[350px] shadow-sm">
+                    <div class="p-4 rounded-2xl bg-app-lavender/40 text-app-navy mb-4">🕵️</div>
+                    <h3 class="text-base font-bold text-app-navy mb-1">Ready for Investigation</h3>
+                    <p class="text-xs text-slate-500 max-w-sm">Enter target repository parameters on the left or select a sample scenario to execute static analysis.</p>
+                </div>
+            </template>
+
+        </section>
+    </main>
+
+    <!-- NEW FEATURE: EVALUATION TEST CASES MODAL -->
+    <div x-show="openTestModal" class="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto" x-cloak>
+        <div class="bg-white border border-app-border rounded-2xl max-w-3xl w-full p-6 space-y-4 shadow-2xl my-8 max-h-[90vh] flex flex-col">
+            
+            <div class="flex justify-between items-center border-b border-app-border pb-3 shrink-0">
+                <div>
+                    <h3 class="text-base font-bold text-app-navy flex items-center gap-2">
+                        🧪 Verdict Evaluation Test Matrix
+                    </h3>
+                    <p class="text-xs text-slate-500">Every decision parameter and rule weight applied during verdict calculation.</p>
+                </div>
+                <button @click="openTestModal = false" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+            </div>
+
+            <!-- Scrollable Test Cases Table -->
+            <div class="overflow-y-auto flex-1 space-y-3 pr-1">
+                <template x-for="tc in report?.test_cases" :key="tc.id">
+                    <div class="p-4 rounded-xl border transition"
+                         :class="tc.passed ? 'border-emerald-200 bg-emerald-50/30' : 'border-amber-200 bg-amber-50/30'">
+                        
+                        <div class="flex justify-between items-start gap-2 mb-2">
+                            <div class="flex items-center gap-2">
+                                <span class="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-800 text-white" x-text="tc.id"></span>
+                                <h4 class="text-xs font-bold text-app-navy" x-text="tc.parameter_name"></h4>
+                            </div>
+
+                            <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase"
+                                  :class="tc.passed ? 'bg-emerald-100 text-emerald-800 border border-emerald-300' : 'bg-amber-100 text-amber-800 border border-amber-300'">
+                                <span x-text="tc.passed ? 'PASSED (0 Risk)' : 'TRIGGERED (Risk Penalty)'"></span>
+                            </span>
+                        </div>
+
+                        <p class="text-xs text-slate-600 mb-2 font-medium" x-text="tc.rule_description"></p>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px] font-mono pt-2 border-t border-slate-200/60">
+                            <div>
+                                <span class="text-slate-400">Observed Value:</span>
+                                <span class="text-slate-800 font-bold ml-1" x-text="tc.observed_value"></span>
+                            </div>
+                            <div>
+                                <span class="text-slate-400">Verdict Impact:</span>
+                                <span class="text-indigo-700 font-bold ml-1" x-text="tc.verdict_impact"></span>
+                            </div>
+                        </div>
+
+                    </div>
+                </template>
+            </div>
+
+            <div class="pt-3 border-t border-app-border flex justify-end shrink-0">
+                <button @click="openTestModal = false" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-xl transition">
+                    Done
+                </button>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Ownership Request Modal -->
+    <div x-show="openOwnershipModal" class="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4" x-cloak>
+        <div class="bg-white border border-app-border rounded-2xl max-w-md w-full p-6 space-y-4 shadow-xl">
+            <div class="flex justify-between items-center border-b border-app-border pb-3">
+                <h3 class="text-sm font-bold text-app-navy">📩 Request Ownership Rights</h3>
+                <button @click="openOwnershipModal = false" class="text-slate-400 hover:text-slate-600 text-sm">✕</button>
+            </div>
+
+            <template x-if="requestStatus">
+                <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium space-y-1">
+                    <div class="font-bold">✅ Ticket Successfully Issued!</div>
+                    <div x-text="requestStatus.message"></div>
+                </div>
+            </template>
+
+            <form @submit.prevent="submitOwnershipRequest()" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Target Owner</label>
+                    <input type="text" :value="report?.detected_owner" disabled class="w-full bg-app-surface border border-app-border rounded-xl px-3 py-2 text-xs text-slate-500 font-mono">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Your Corporate Email</label>
+                    <input type="email" x-model="ownershipForm.email" required placeholder="developer@company.com" class="w-full bg-app-surface border border-app-border rounded-xl px-3 py-2 text-xs text-app-navy font-mono">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">Reason for Request / Deletion Justification</label>
+                    <textarea x-model="ownershipForm.reason" required rows="3" placeholder="Explain why you need ownership rights or deletion permission for this symbol..." class="w-full bg-app-surface border border-app-border rounded-xl px-3 py-2 text-xs text-app-navy"></textarea>
+                </div>
+
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" @click="openOwnershipModal = false" class="px-4 py-2 bg-app-surface hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition">Close</button>
+                    <button type="submit" :disabled="isSubmittingRequest" class="px-4 py-2 bg-app-periwinkle hover:bg-indigo-600 text-white text-xs font-bold rounded-xl transition">
+                        <span x-text="isSubmittingRequest ? 'Routing Ticket...' : 'Send Ownership Request'"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Alpine App & Chart Logic -->
+    <script>
+        let radarChartInstance = null;
+
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('sherlockApp', () => ({
+                target: {
+                    repo: 'C:/Users/SHRUTI MISHRA/requests',
+                    file: 'src/requests/api.py',
+                    symbol: 'get'
+                },
+                ownershipForm: {
+                    email: '',
+                    reason: ''
+                },
+                isAnalyzing: false,
+                isSubmittingRequest: false,
+                backendConnected: false,
+                openOwnershipModal: false,
+                openTestModal: false,
+                errorMessage: null,
+                requestStatus: null,
+                report: null,
+
+                init() {
+                    this.checkBackendHealth();
+                },
+
+                async checkBackendHealth() {
+                    try {
+                        const res = await fetch('http://localhost:8000/docs');
+                        this.backendConnected = res.ok;
+                    } catch (e) {
+                        this.backendConnected = false;
+                    }
+                },
+
+                loadPreset(repoPath, filePath, symbol) {
+                    this.target = { repo: repoPath, file: filePath, symbol: symbol };
+                    this.runInvestigation();
+                },
+
+                resetScan() {
+                    this.report = null;
+                    this.errorMessage = null;
+                    this.requestStatus = null;
+                    if (radarChartInstance) {
+                        radarChartInstance.destroy();
+                        radarChartInstance = null;
+                    }
+                },
+
+                async runInvestigation() {
+                    this.isAnalyzing = true;
+                    this.errorMessage = null;
+                    this.requestStatus = null;
+
+                    try {
+                        const url = new URL('http://localhost:8000/api/v1/investigate');
+                        url.searchParams.append('repo', this.target.repo);
+                        url.searchParams.append('file', this.target.file);
+                        url.searchParams.append('symbol', this.target.symbol);
+
+                        const response = await fetch(url);
+                        if (!response.ok) {
+                            const errData = await response.json();
+                            throw new Error(errData.detail || 'Backend returned an error');
+                        }
+
+                        this.report = await response.json();
+                        this.backendConnected = true;
+
+                        this.$nextTick(() => {
+                            this.renderRadarChart();
+                        });
+
+                    } catch (err) {
+                        this.errorMessage = err.message || 'Could not connect to FastAPI server. Ensure main.py is running on port 8000.';
+                        this.backendConnected = false;
+                    } finally {
+                        this.isAnalyzing = false;
+                    }
+                },
+
+                async submitOwnershipRequest() {
+                    this.isSubmittingRequest = true;
+                    try {
+                        const response = await fetch('http://localhost:8000/api/v1/request-ownership', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                repo_path: this.target.repo,
+                                file_path: this.target.file,
+                                symbol_name: this.target.symbol,
+                                requester_email: this.ownershipForm.email,
+                                reason: this.ownershipForm.reason
+                            })
+                        });
+
+                        if (!response.ok) throw new Error('Request submission failed.');
+                        this.requestStatus = await response.json();
+                        this.ownershipForm.reason = '';
+                    } catch (e) {
+                        alert(e.message);
+                    } finally {
+                        this.isSubmittingRequest = false;
+                    }
+                },
+
+                renderRadarChart() {
+                    const canvas = document.getElementById('riskRadarChart');
+                    if (!canvas) return;
+
+                    if (radarChartInstance) radarChartInstance.destroy();
+
+                    const staticRef = this.report.evidence_list.find(e => e.category === 'Static References')?.risk_points || 0;
+                    const testCoverage = this.report.evidence_list.find(e => e.category === 'Tests')?.risk_points || 0;
+                    const isDefined = 20;
+                    const totalScore = Math.min(this.report.totalRiskScore, 100);
+
+                    const ctx = canvas.getContext('2d');
+                    radarChartInstance = new Chart(ctx, {
+                        type: 'radar',
+                        data: {
+                            labels: ['External Static Refs', 'Test Suite Coverage', 'Symbol Scope', 'Overall Risk Density'],
+                            datasets: [{
+                                label: 'Symbol Risk Impact Vector',
+                                data: [staticRef, testCoverage, isDefined, totalScore],
+                                backgroundColor: 'rgba(99, 102, 241, 0.2)',
+                                borderColor: '#6366f1',
+                                borderWidth: 2,
+                                pointBackgroundColor: '#0284c7'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                r: {
+                                    angleLines: { color: '#e2e8f0' },
+                                    grid: { color: '#f1f5f9' },
+                                    ticks: { display: false, beginAtZero: true, max: 100 }
+                                }
+                            },
+                            plugins: { legend: { display: false } }
+                        }
+                    });
+                }
+            }));
+        });
+    </script>
+</body>
+</html>
